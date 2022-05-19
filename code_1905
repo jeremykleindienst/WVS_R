@@ -1,0 +1,97 @@
+install.packages('Hmisc')
+
+library(dplyr)
+library(data.table)
+library(Hmisc)
+
+
+rm(list = ls())
+load("C:/Users/jerem/OneDrive/Marketing Intelligence/Explorative Statistik/WVS_Cross-National_Wave_7_Rdata_v3_0.rdata")
+
+WVS_raw <- `WVS_Cross-National_Wave_7_R_v3_0`
+Relevante_Variablen <- c("B_COUNTRY", "D_INTERVIEW", "K_DURATION", "E_RESPINT", "F_INTPRIVACY",
+                         "Q49", "Q57",	"Q58",	"Q59",
+                         "Q60",	"Q61",	"Q62",	"Q63",	"Q64",	"Q65",	"Q66",	"Q67",	"Q68",	"Q69",
+                         "Q70",	"Q71",	"Q72",	"Q73",	"Q74",	"Q75",	"Q76",	"Q77",	"Q78",	"Q79",
+                         "Q80",	"Q81",	"Q82",	"Q83",	"Q84",	"Q85",	"Q86",	"Q87",	"Q88",	"Q89",
+                         "Q164","Q223","Q240",  "Q260", "Q262", "Q275", "Q288") 
+#262 statt 261 für age | literacy raus, da überall gleicher Wert
+Neuer_Datensatz_alle_Länder <- WVS_raw[Relevante_Variablen]
+Relevant_raw <- subset(Neuer_Datensatz_alle_Länder, B_COUNTRY == "276")
+setnames(Relevant_raw,
+         old = c("B_COUNTRY", "D_INTERVIEW", "K_DURATION", "E_RESPINT", "F_INTPRIVACY",
+                               "Q49", "Q57",	"Q58",	"Q59",
+                               "Q60",	"Q61",	"Q62",	"Q63",	"Q64",	"Q65",	"Q66",	"Q67",	"Q68",	"Q69",
+                               "Q70",	"Q71",	"Q72",	"Q73",	"Q74",	"Q75",	"Q76",	"Q77",	"Q78",	"Q79",
+                               "Q80",	"Q81",	"Q82",	"Q83",	"Q84",	"Q85",	"Q86",	"Q87",	"Q88",	"Q89",
+                               "Q164","Q223","Q240",  "Q260", "Q262", "Q275", "Q288"),
+         new = c('country', 'id','duration', 'interest', 'privacy',
+                 'Q49', "Q57",	"Q58",	"Q59",
+                 "Q60",	"Q61",	"Q62",	"Q63",	"Q64",	"Q65",	"Q66",	"Q67",	"Q68",	"Q69",
+                 "Q70",	"Q71",	"Q72",	"Q73",	"Q74",	"Q75",	"Q76",	"Q77",	"Q78",	"Q79",
+                 "Q80",	"Q81",	"Q82",	"Q83",	"Q84",	"Q85",	"Q86",	"Q87",	"Q88",	"Q89",
+                 'god', "politics_election", "politics_leftright", "sex", "age", "education", "income"))
+
+typeof(Relevant_raw$Q_60) #ist für Q Items "NULL", problematisch?
+
+length(unique(Relevant_raw$id)) == length(Relevant_raw$id)
+
+plot(Relevant_raw$duration) #4 Ausreißer (2 oben 2 unten) raus
+hist(Relevant_raw$interest) #alle mit 3=uninteressiert raus
+hist(Relevant_raw$literacy) #überall -4 --> Variable raus
+hist(Relevant_raw$privacy) #nicht verändern, ggf mal auf Unterschied testen
+hist(Relevant_raw$sex)
+hist(Relevant_raw$age)
+hist(Relevant_raw$education)
+hist(Relevant_raw$income)
+hist(Relevant_raw$Q49)
+hist.data.frame(Relevant_raw)
+unique(Relevant_raw[c("politics_election")])
+
+sum(Relevant_raw$Q49 < 0) #prüfen, wie viele negative Werte eine Spalte hat
+apply(Relevant_raw, 2, function(col)sum((col)<0)/length(col)) #Anteil negative Werte pro Spalte
+apply(Relevant_raw, 2, function(col)sum((col)< -1)/length(col)) #Anteil Missings Werte pro Spalte
+apply(Relevant_raw, 2, function(col)sum((col)== -1)/length(col)) #Anteil Dont Knows pro Spalte
+#alle Variablen mit Dont Knows >10% raus? Das wären:
+#Q75, Q80, Q84, Q85, Q86, Q87, Q89, politics_election
+#"Weiß ich nicht" Antworten auf Items sollte man evtl extra als Dummy behandeln sagt Kuhli
+
+
+#na_if(Relevant_raw, "-4")
+
+# alle Reihen mit mindestens 1 Missing (-2 oder niedriger) entfernt:
+Relevant_raw_noNA <- Relevant_raw
+Relevant_raw_noNA[Relevant_raw_noNA < -1] <- NA
+noNA <- Relevant_raw_noNA %>% na.omit()
+length(noNA$id)
+length(Relevant_raw$id)-length(noNA$id) #Zahl der Probanden, die entfernt werden müssten
+
+# alle Reihen mit mindestens 1 negativer Wert (dont know oder missing) entfernt:
+Relevant_raw_noNegative <- Relevant_raw
+Relevant_raw_noNegative[Relevant_raw_noNegative < 0] <- NA
+noNegative <- Relevant_raw_noNegative %>% na.omit()
+length(noNegative$id)
+length(Relevant_raw$id)-length(noNegative$id) #Zahl der Probanden, die entfernt werden müssten
+
+
+#Probanden mit vielen Dont Knows
+Relevant_raw$dontknow <- rowSums(Relevant_raw == -1)
+desc_dontknow <- Relevant_raw[order(-Relevant_raw$dontknow),]
+
+columns=c("id","dontknow")
+view(desc_dontknow[1:100,columns])
+desc_dontknow[1:100,columns]
+
+#Probanden mit vielen Missings/Dont Knows
+Relevant_raw$missingdontknow <- rowSums(Relevant_raw < 0)
+desc_missingdontknow <- Relevant_raw[order(-Relevant_raw$missingdontknow),]
+desc_missingdontknow[Relevant_raw$id, Relevant_raw$missingdontknow]
+
+columns=c("id","missingdontknow")
+view(desc_missingdontknow[1:100,columns])
+desc_missingdontknow[1:100,columns]
+
+#Probanden mit Dont Knows und Missings von jeweils >10 (entfernen?)
+columns2=c("id","dontknow","missingdontknow")
+manynegatives <- Relevant_raw[Relevant_raw$dontknow>10 & Relevant_raw$missingdontknow>10,columns2]
+length(manynegatives$id)
